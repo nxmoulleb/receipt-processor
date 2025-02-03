@@ -3,13 +3,10 @@ import jsonschema
 from jsonschema import validate
 import uuid
 from flask import *
+from datetime import datetime
 import math
 
 app = Flask(__name__)
-
-@app.route('/')
-def hello_world():
-    return 'Hello World'
 
 schema = {
     'type': 'object',
@@ -19,8 +16,8 @@ schema = {
     ],
     'properties': {
         'retailer': {'type': 'string'},
-        'purchaseDate': {'type': 'string'},
-        'purchaseTime': {'type': 'string'},
+        'purchaseDate': {'type': 'string', 'pattern': '^\d{4}-\d{2}-\d{2}$'},
+        'purchaseTime': {'type': 'string', 'pattern': '^\d{2}:\d{2}$'},
         'items': {
             'type': 'array', 
             'minItems': 1,
@@ -28,12 +25,24 @@ schema = {
                 'type': 'object',
                 'properties': {
                     'shortDescription': {'type': 'string'},
-                    'price': {'type': 'string'}
+                    'price': {'type': 'string', 'pattern': '^\\d+\\.\\d{2}$'}
                 }
             }},
-        'total': {'type': 'string'}
+        'total': {'type': 'string', 'pattern': '^\\d+\\.\\d{2}$'}
     }
 }
+
+def validate_date(date_str):
+    try:
+        datetime.strptime(date_str, '%Y-%m-%d')
+    except ValueError:
+        raise ValueError('Invalid date format or non-existent date.')
+
+def validate_time(time_str):
+    try:
+        datetime.strptime(time_str, '%H:%M')
+    except ValueError:
+        raise ValueError('Invalid time format or non-existent time.')
 
 def get_points(json):
     total = 0
@@ -59,7 +68,7 @@ def get_points(json):
         total += 6
     
     hour_purchased = int(json['purchaseTime'].split(':')[0])
-    if(hour_purchased >= 14 and hour_purchased < 16):
+    if(14 <= hour_purchased < 16):
         total += 10
 
     return total
@@ -67,27 +76,29 @@ def get_points(json):
 
 @app.route('/receipts/process', methods=['POST'])
 def handle_process():
-    id = str(uuid.uuid4())
-    points = 0
     receipt = request.get_json()
     try:
         jsonschema.validate(instance=receipt, schema=schema)
-        
-        points = get_points(receipt)
-
-        db[id] = points
-        return json.dumps({'id': id})
+        validate_date(receipt['purchaseDate'])
+        validate_time(receipt['purchaseTime'])
     except jsonschema.exceptions.ValidationError as ex:
-        error_message = 'The receipt is invalid.'
-        abort(Response(error_message, 400))
+        abort(Response('The receipt is invalid.', 400))
+    except ValueError as ex:
+        abort(Response('The receipt is invalid.', 400))
+    
+    id = str(uuid.uuid4())
+    points = get_points(receipt)
+    db[id] = points
+
+    return jsonify({'id': id})
 
 @app.route('/receipts/<id>/points')
 def handle_points(id):
-    if(not id in db):
-        error_message = 'No receipt found for that ID.'
-        abort(Response(error_message, 404))
-    return json.dumps({'points': db[id]})
+    points = db.get(id)
+    if points is None:
+        abort(Response('No receipt found for that ID.', 404))
+    return jsonify({'points': db[id]})
 
 if __name__ == '__main__':
     db = {}
-    app.run()
+    app.run(host='0.0.0.0', port=8080)

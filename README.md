@@ -8,6 +8,8 @@ The server I made is open on `0.0.0.0:8080`. Once the Docker container is run, y
 * `http://0.0.0.0:8080/receipts/process`
 
 ## Running the Docker Container
-1. run `docker build -t receipts-server .`
-2. run `docker run --name receipts-server -p 8080:8080 receipts-server`
+1. Run `docker build -t receipts-server .`. This will create an image named `receipts-server`.
+
+2. Run `docker run --name receipts-server -p 8080:8080 receipts-server`. This will create a container named `receipts-server`.
+
 3. Have fun! Hopefully you dont break anything too badly.
